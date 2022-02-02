@@ -9,7 +9,7 @@ This is the first and only *individual* (as opposed to *team*) project this seme
 
 Term: Fall 2022
 
-+ Projec title: Lorem ipsum dolor sit amet
++ Projec title: How does religion and science related in the field of Philosophy?
 + This project is conducted by Wenhui Fang
 
 + Project summary: Socrates once said, “Having the fewest wants, I am nearest to the gods”. Religion seems to be an important topic through the history of philosophy. With the large dataset, we can explore the development of philosophy entangling with religion. Moreover, science is an important topic in the field of philosophy as well and people sometimes believes that religion and science are opposites. Therefore, with the large dataset, we will explore the relationship between philosophy, religion and science by trying to answering the following questions.
