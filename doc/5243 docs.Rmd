@@ -1,0 +1,422 @@
+---
+title: "5243 Project1"
+author: "Wenhui Fang"
+time: 02/02/2022
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+The term "philosophy" seems a word that are used in many conversations. When our parents taught us their life experience, they called their words, "philosophy". When English teacher explained a book, they used the word, "philosophy". What does "philosophy" really mean? Different people have different interpretation. The data set we have consists over 360,000 sentences that 36 philosophers said. These philosophers are from different ages, varied from 350 BC to 2000 AD. With the large data set, we are able to study the history and the contents of philosophy. 
+
+Socrates once said, "Having the fewest wants, I am nearest to the gods". Religion seems to be an important topic through the history of philosophy. With the large dataset, we can explore the development of philosophy entangling with religion. Moreover, science is an important topic in the field of philosophy as well and people sometimes believes that religion and science are opposites. 
+Therefore, with the large dataset, we will explore the relationship between philosophy, religion and science by trying to answering the following questions.
+
+1) Does religion and science are opposites in the field of philosophy?
+2) Are science and religion often brought up together?
+3) How does the sentiment toward science and religion for each school?
+4) How does the relationship between philosophy and science, religion change over time?
+5) How does the attitude towards science and religion change over the year?
+
+Therefore, to study the contents of philosophy, the topic and the direction of data analysis will be the relationship between science, religion and philosophy.
+
+# About the Data
+## Data overview
+```{r}
+library(tidyverse)
+library(tibble)
+library(dplyr)
+library(stringr)
+library(writexl)
+library(tidytext)
+library(syuzhet)
+library(gplots)
+data <- read.csv('philosophy_data.csv')
+names(data)
+dim(data)
+author <- data%>%select(author)%>%unique
+school <- data%>%select(school)%>%unique
+author_school <- data%>%select(author, school)%>%unique
+```
+From the data, we can see that the data not only includes the sentences that 36 philosophers said, it also provides the book containing sentences, published year, authors, and schools.
+Since the year of each sentences were not provided, we will treat the publication date of books as the year of each sentences.
+There are 13 schools and 36 authors and over 360,000 sentences.
+
+## Is data balanced over authors, schools and years?
+```{r}
+data <- data%>%select(-sentence_lowered,-sentence_spacy,-corpus_edition_date)%>%rename(year = original_publication_date)
+data%>%select(author)%>%group_by(author)%>%summarize(count = n())%>%
+  mutate(author = fct_reorder(author, count))%>%
+  ggplot(aes(x = author, y = count)) + 
+  coord_flip() + geom_col(fill = "royalblue") + 
+  labs(title = "Number of sentences for each author",
+       y = "Number of sentences")
+
+data%>%select(year)%>%group_by(year)%>%summarize(count = n())%>%
+  mutate(year = factor(year), year = fct_reorder(year, count))%>%
+  ggplot(aes(x = year, y = count)) + 
+  coord_flip() + geom_col(fill = "royalblue") + 
+  labs(title = "Number of sentences for each year recorded",
+       y = "Number of sentences")
+```
+
+From the graph, we can see that the data is severely unbalanced for authors and years. Therefore, to avoid potential bias, we will use percentage for every data analysis followed. Also, there is a huge gap between year 125 to 1600, in the analysis related to time, we will discard the sentences before the year 1600.
+
+## Determine if the topic can be analyzed by the data
+### Religion
+To pick out the sentence related to religion, we use the philosophy data project website. It provides ten words that most relevant words to the key word that are used in the data. The key words we are using are, "religion","god","Zeus", and their most relevant words are used to search religious sentences.
+```{r}
+# Religion sentence
+rel_sentence <- data%>%
+  filter(str_detect(lemmatized_str,"(G|g)od|(D|d)eity|(J|j)esus|(W|w)isdom|
+                    (G|g)race|(D|d)ivin|(S|s)in|(C|c)reator|
+                    (E|e)ternal|(S|s)upreme|(T|t)heology|(C|c)hrist|(A|a)pollo|
+                    (A|a)lcibiades|(M|m)inos|(A|a)chilles|(P|p)ericles|
+                    (A|a)phrodite|(F|f)aith|(E)eternal|(C|c)reator|
+                    (P|p)rovidence"))
+rel_sentence_school_count<-rel_sentence%>%group_by(school)%>%
+  summarise(rel_sentence_count = n())%>%
+  left_join(data%>%group_by(school)%>%summarize(sentence_count=n()),by = "school")%>%
+  mutate(rel_sentence_perc = rel_sentence_count/sentence_count)%>%
+  mutate(school = fct_reorder(school, rel_sentence_perc))
+
+rel_sentence_school_count%>%
+  ggplot(aes(x = reorder(school,rel_sentence_perc), y = rel_sentence_perc)) + geom_col(fill = "lightcoral") +
+  coord_flip() +
+  labs(title = "Percentage of sentence related to religion to the 
+       overall sentences for each school", 
+       subtitle = "Most of school have percentages over 5%",
+       y = "Percentage of sentences related to religion", x = "school")+ 
+    scale_y_continuous(labels = scales::percent)
+cat('Overall percentage of sentences that are related to religion is,',sum(rel_sentence_school_count$rel_sentence_count)/sum(rel_sentence_school_count$sentence_count)*100,"%")
+
+
+```
+
+Overall, there are 8% of sentences are related to religion, which is about 30,000 sentences left. For a big data set containing over 360,000 sentences, we can see that philosophy concerned about the religion, and we can use the data to analyze the topic.
+From the graph, we can see that over 5 to 8 percent of sentences are related to religion. Rationalism is the most related school to religion and over 20 percent of sentences from them concerned about God. The least related school is analytic, but it still has over 4% of sentences.
+In this dataset with 36 philosophers, we can conclude that religion is an important topic for them. 
+
+### Science
+For science, the key words we are using are "Science", "Mathematics", and "Physicis".
+```{r}
+sci_sentence <- data%>%
+  filter(str_detect(lemmatized_str,"(S|s)cience|
+                    (M|m)ath|(P|p)sycolog|(P|p)hilosop|
+                    (L|l)ogic|(P|p)hysic|(T|t)heolo|(M|m)edic|
+                    (S|s)cientific|(G|g)eomet|(A|a)stro"))
+sci_sentence_school_count<-sci_sentence%>%group_by(school)%>%
+  summarise(sci_sentence_count = n())%>%
+  left_join(data%>%group_by(school)%>%summarize(sentence_count=n()))%>%
+  mutate(sci_sentence_perc = sci_sentence_count/sentence_count)
+
+sci_sentence_school_count%>%
+  mutate(school = fct_reorder(school, sci_sentence_perc))%>%
+  ggplot(aes(x = school, y = sci_sentence_perc)) + geom_col(fill = "royalblue") +
+  coord_flip() +
+  labs(title = "Percentage of sentence related to science to the 
+       overall sentences for each school", 
+       subtitle = "Most of school have percentages over 3%",
+       y = "Percentage of sentences related to science") +
+    scale_y_continuous(labels = scales::percent)
+cat('Overall percentage of sentences that are related to science is,',sum(sci_sentence_school_count$sci_sentence_count)/sum(sci_sentence_school_count$sentence_count)*100,"%")
+```
+
+Overall, the percentage of sentences that are related to science is 4%. For each school, most of them are over 3 to 4 percentages. The school that are most concerned about science is phenomenology with almost 10% of sentences related to science. School that least concerned about science is capitalism which has about 1%.
+
+Therefore, after data mining, we can see that religion and science play significant roles in the field of philosophy.
+
+# Data processing and exploring by school
+## Does religion and science are opposites in the field of philosophy with each school?
+As we mentioned in the introduction, people sometimes believes that religion and science are opposites. Therefore, our question arise, does the school that are more concerned about religion concerned less of science?
+```{r}
+sci_sentence_school_count%>%left_join(rel_sentence_school_count,
+                                      by = c("school", "sentence_count"))%>%
+  select(school,sci_sentence_perc,rel_sentence_perc)%>%
+  mutate(school = fct_reorder(school, sci_sentence_perc))%>%
+  pivot_longer(cols = c("sci_sentence_perc","rel_sentence_perc"),
+               names_to = "Type", values_to = "Value")%>%
+  ggplot(aes(x = school, y = Value, fill = Type)) + geom_col(position = "dodge") + 
+  coord_flip() +
+  labs(title = "The percentage of religious and scientific topics for each school",
+       subtitle = "Arranged from the largest to the smallest value of 
+       percentage of scientific topic",
+       labels = "percentage",
+       x = "percentage",
+       fill = "Type") + 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science"))
+
+```
+
+By the graph, Rationalism is a particular religion that the percentage of religious topics are over 20% while others are under 10%. Phenomenology, analytic are the only two school that concerned about science more than religion. We can see that most schools that are more concerned with science are actually also more concerned with religion. 
+Therefore, we cannot conclude that science and religion are opposites, but they probably have an positive correlation.
+
+## Do science and religion often brought up together?
+```{r}
+sci_sentence%>%inner_join(rel_sentence,by = c("title", "author",
+                                              "school", "sentence_str", "year",
+                                              "sentence_length", "tokenized_txt",
+                                              "lemmatized_str")
+                          )%>%group_by(school)%>%summarise(sci_rel_count = n())%>%
+  left_join(rbind(sci_sentence,rel_sentence)%>%unique%>%
+              group_by(school)%>%summarise(sci_or_rel_count = n()),by = "school")%>%
+  mutate(perc = sci_rel_count/sci_or_rel_count)%>%
+  mutate(school = fct_reorder(school, perc))%>%
+  ggplot(aes(x = school, y = perc)) + geom_col(fill = "darkturquoise") + 
+  coord_flip() + 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of sentence that both have religious and 
+       scientific topics",
+       subtitle = "relative to all the sentence that have religious or scientific 
+       key words",
+       y = "percentage")
+```
+
+In this graph, we calculated the percentage of sentences that both have scientific and religious words in one sentence to all sentences that are involved with religion and science.
+From the result graph, we can see that the highest percentage is about 6%. After we filter the sentences that are related to religion and science, we have about over 30,000 sentences. 6% of them is not that large, compared to the whole data set.
+Therefore, we cannot conclude that that science and religion are always brought up together.
+
+## How does the sentiment toward science and religion for each school?
+```{r}
+rel_word_sep <- rel_sentence%>%
+  mutate(sentence = map(sentence_str, 
+                              function(x) 
+                                str_replace_all(x, "\\,|\\!|\\?|\\'|\\-|\\(|\\)|\\.|\\/|\\:|
+                                                ^|@|%|#|$|\\;",' ')))%>%
+  mutate(word = 
+           map(sentence_str,function(x) strsplit(x,' ')))%>%
+  select(-tokenized_txt,-lemmatized_str)%>%
+  unnest(word)%>%unnest%>%filter(str_detect(word,'[a-zA-Z]'))
+
+rel_sentence_word_count <- rel_word_sep%>%select(school,sentence_str,word)%>%
+  group_by(school, sentence_str)%>%
+  summarise(rel_sentence_word_n = n())
+
+rel_sentence_word_n <- rel_sentence%>%
+  inner_join(rel_sentence_word_count, by = c('school',"sentence_str"))%>%
+  select(school, year, sentence_str,rel_sentence_word_n)
+
+rel_sentiment <- get_nrc_sentiment(rel_sentence_word_n$sentence_str)
+```
+
+```{r}
+rel_sentiment_perc <- rel_sentiment%>%select(positive,negative)%>%
+  mutate(rel_determine = case_when(negative < positive ~ "positive",
+                               negative > positive ~ "negative"))%>%
+  cbind(rel_sentence)%>%select(school,rel_determine)%>%
+  group_by(school,rel_determine)%>%
+  na.omit()%>%
+  summarise(count = n())%>%left_join(rel_sentence_school_count,by = "school")%>%
+  select(school, rel_determine, count, rel_sentence_count)%>%
+  mutate(rel_perc = count/rel_sentence_count)%>%
+  select(school,rel_determine, rel_perc)
+```
+
+```{r}
+sci_word_sep <- sci_sentence%>%
+  mutate(sentence = map(sentence_str, 
+                              function(x) 
+                                str_replace_all(x, "\\,|\\!|\\?|\\'|\\-|\\(|\\)|\\.|\\/|\\:|
+                                                ^|@|%|#|$|\\;",' ')))%>%
+  mutate(word = 
+           map(sentence_str,function(x) strsplit(x,' ')))%>%
+  select(-tokenized_txt,-lemmatized_str)%>%
+  unnest(word)%>%unnest%>%filter(str_detect(word,'[a-zA-Z]'))
+
+sci_sentence_word_count <- sci_word_sep%>%select(school,sentence_str,word)%>%
+  group_by(school, sentence_str)%>%
+  summarise(sci_sentence_word_n = n())
+
+sci_sentence_word_n <- sci_sentence%>%
+  inner_join(sci_sentence_word_count, by = c('school',"sentence_str"))%>%
+  select(school, year, sentence_str,sci_sentence_word_n)
+
+sci_sentiment <- get_nrc_sentiment(sci_sentence_word_n$sentence_str)
+```
+
+```{r}
+sci_sentiment_perc <- sci_sentiment%>%select(positive,negative)%>%
+  mutate(sci_determine = case_when(negative+1  < positive ~ "positive",
+                               negative > positive+1  ~ "negative"))%>%
+  cbind(sci_sentence)%>%select(school,sci_determine)%>%
+  group_by(school,sci_determine)%>%
+  na.omit()%>%
+  summarise(count = n())%>%left_join(sci_sentence_school_count,by = "school")%>%
+  select(school, sci_determine, count, sci_sentence_count)%>%
+  mutate(sci_perc = count/sci_sentence_count)%>%
+  select(school,sci_determine, sci_perc)
+
+pos_neg_school <- sci_sentiment_perc%>%left_join(rel_sentiment_perc, by = c('sci_determine' = 'rel_determine',"school"))%>%rename(type = sci_determine)
+
+temp<-pos_neg_school%>%filter(type == "positive")
+temp$school <- with(temp, reorder(school, sci_perc))
+  
+temp%>%mutate(school = fct_reorder(school, sci_perc))%>%
+  pivot_longer(cols = c("sci_perc","rel_perc"))%>%
+  ggplot(aes(x = school, y = value, fill = name)) + 
+  geom_col(position='dodge') + coord_flip()+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of sentence that has positive 
+       attitute toward that topic",
+       subtitle = "Sentence that have two more 
+       positive words than negative words are labled as positive",
+       y = "percentage")
+
+temp<-pos_neg_school%>%filter(type == "negative")
+temp$school <- with(temp, reorder(school, sci_perc))
+temp%>%pivot_longer(cols = c("sci_perc","rel_perc"))%>%
+  ggplot(aes(x = school, y = value, fill = name)) + 
+  geom_col(position='dodge') + coord_flip() + 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of sentence that has negative 
+       attitute toward that topic",
+       subtitle = "Sentence that have two more 
+       negative words than positive words are labled as negative",
+       y = "percentage") 
+```
+
+With the sentiment analysis, we are able to classify the words used in the sentences to positive and negative. To label the sentences as positive or negative, I choose to compare the number of positive and negative words in one sentence. To improve the accuracy of labeling, I set the standard that positive sentences must have two more positive words than negative words instead of one. 
+From these two graphs, we can see that compared to negativity, philosophy holds positivity on both religion and science and almost half of sentences from each school have positive sentiment toward religion and about 35% of sentences hold positive sentiment toward science.
+For negative sentences, there are only about 10 percent of sentences that are negative for religious topics and only about 5 percent for scientific topics.
+Overall, sentences related to religion and scientific have mostly positive attitudes. Only few of them have negative sentiment. 
+For the trend, the graph is reordered by the percentage of science. We can see that 
+there is no apparent trend in the positive and negative graph. Therefore, we can conclude that religion and science are not opposites. One school compliment religion does not mean that it loath science and vise-versa.
+
+```{r}
+heatmap.2(cor(sci_sentiment%>%select(anger:trust)), 
+          scale = "none", 
+          col = bluered(100),  margin=c(6, 6), key=F,
+          trace = "none", density.info = "none")
+```
+
+From the heat map, we can clearly see that there are two groups. One with "Anticipation, joy, surprise, trust" and the other one with "fear, sadness, anger, disgust".
+It is reasonable, and from the map we can see that the first group are strongly correlated with four emotions. Therefore, when philosophy talks about positive emotions, they often brought these two or three or even four emotions together. For the second group with negative emotions, the correlation is weak or non-existed. Thus, they are not often brought up together.
+
+From the previous result, we know that sentences are mostly positive. The heatmap here also illustrate the same result. 
+
+# Data processing and exploring by year
+## How does the relationship between philosophy and science, religion change over time?
+After analyzing the relationship for each school, it got us wondering that does the attitude toward science, religion change in the development of history?
+```{r}
+year_count <- data%>%group_by(year)%>%summarise(count = n())%>%
+  filter(year>1000)%>%
+  mutate(year_level = cut(year,breaks = seq(-400,2000,100),include.lowest = T,
+                          dig.lab = 5))%>%
+  group_by(year_level)%>%summarise(count = sum(count))
+rel_year_perc <- rel_sentence%>%group_by(year)%>%summarize(rel_count = n())%>%
+  filter(year>1000)%>%
+  mutate(year_level = cut(year,breaks = seq(-400,2000,100),include.lowest = T,
+                          dig.lab = 5))%>%
+  select(year_level, rel_count)%>%
+  group_by(year_level)%>%summarise(rel_count = sum(rel_count))%>%
+  left_join(year_count,by = "year_level")%>%
+  mutate(rel_perc = rel_count/count)
+
+
+sci_year_perc <- sci_sentence%>%group_by(year)%>%summarize(sci_count = n())%>%
+  mutate(year_level = cut(year,breaks = seq(-400,2000,100),include.lowest = T,
+                          dig.lab = 5))%>%
+  select(year_level, sci_count)%>%
+  group_by(year_level)%>%summarise(sci_count = sum(sci_count))%>%
+  left_join(year_count,by = "year_level")%>%
+  mutate(sci_perc = sci_count/count)
+
+rel_year_perc%>%left_join(sci_year_perc,by = c("year_level", "count"))%>%
+  select(year_level, rel_perc, sci_perc)%>%
+  pivot_longer(cols = c("rel_perc", "sci_perc"))%>%
+  ggplot(aes(x = year_level, y = value, fill = name)) + geom_col(position = "dodge")+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of religious and scientific sentences over the year",
+       subtitle = "For every 100 years", x = "year",
+       y = "percentage") 
+```
+
+The change in mind is not something that can happen in few years. Therefore, to explore the change of religion and science in the development of philosophy, we will divide the sentences every 100 years to see if there is a trend.
+From the graph, it is interesting that religion is always a hot topic for philosophy. Like mentioned in the introduction, there is a huge gap in the timeline between the year 200 to the year 1600. Therefore, it is reasonable that we only consider the year after 1600 to 2000. We can see that the percentage of sentences related to religion decreases as the year moves forwards from 15% to about 6%. Thus, even though religious topics are still important in the field of philosophy, the frequency of mentioning religion by philosophers is less and less as the time moves forward.
+
+For the sentence related to science, even though the year from 1800 to 1900 is an outlier, we can still see that it also have a upward trend from about 4 percent to 6 percent. The graph shows that scientific topics are becoming more important in these 400 year.
+
+Overall, the percentage of religion is always higher than the science, but as the years moves forward, philosophers considered less and less about religion, more and more on science.
+
+## How does the attitude towards science and religion change over the year?
+```{r}
+rel_sentiment_year_perc <- rel_sentiment%>%select(positive,negative)%>%
+  mutate(rel_determine = case_when(negative+1 < positive ~ "positive",
+                               negative > positive+1 ~ "negative"))%>%
+  cbind(rel_sentence)%>%select(year,rel_determine)%>%
+  group_by(year,rel_determine)%>%
+  na.omit()%>%
+  summarise(rel_count = n())%>%
+  left_join(rel_sentence%>%group_by(year)%>%summarise(count = n()))%>%
+  filter(year>1000)%>%
+  mutate(year_level = cut(year,breaks = seq(-400,2000,100),include.lowest = T,
+                          dig.lab = 5))%>%
+  group_by(year_level,rel_determine)%>%summarise(rel_count = sum(rel_count),
+                                   count = sum(count))%>%
+  mutate(rel_perc = rel_count/count)%>%
+  select(year_level,rel_determine, rel_perc)
+
+
+sci_sentiment_year_perc <- sci_sentiment%>%select(positive,negative)%>%
+  mutate(sci_determine = case_when(negative+1 < positive ~ "positive",
+                               negative > positive+1 ~ "negative"))%>%
+  cbind(sci_sentence)%>%select(year,sci_determine)%>%
+  group_by(year,sci_determine)%>%
+  na.omit()%>%
+  summarise(sci_count = n())%>%
+  left_join(sci_sentence%>%group_by(year)%>%summarise(count = n()))%>%
+  filter(year>1000)%>%
+  mutate(year_level = cut(year,breaks = seq(-400,2000,100),include.lowest = T,
+                          dig.lab = 5))%>%
+  group_by(year_level,sci_determine)%>%summarise(sci_count = sum(sci_count),
+                                   count = sum(count))%>%
+  mutate(sci_perc = sci_count/count)%>%
+  select(year_level,sci_determine, sci_perc)
+
+pos_neg_year <- sci_sentiment_year_perc%>%left_join(rel_sentiment_year_perc, by = c('sci_determine' = 'rel_determine',"year_level"))%>%rename(type = sci_determine)
+
+pos_neg_year%>%filter(type == "positive")%>%
+  pivot_longer(c("sci_perc","rel_perc"))%>%
+  ggplot(aes(x = year_level, y = value, fill = name))+
+  geom_col(position = "dodge")+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of sentence that has positive 
+       attitute toward that topic",
+       subtitle = "Sentence that have two more 
+       positive words than positive words are labled as positive",
+       y = "percentage", x = "year") 
+
+pos_neg_year%>%filter(type == "negative")%>%
+  pivot_longer(c("sci_perc","rel_perc"))%>%
+  ggplot(aes(x = year_level, y = value, fill = name))+
+  geom_col(position = "dodge")+ 
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_discrete(name = "Type", labels = c("Religion", "Science")) +
+  labs(title = "The percentage of sentence that has negative 
+       attitute toward that topic",
+       subtitle = "Sentence that have two more 
+       negative words than positive words are labled as negative",
+       y = "percentage", x = "year") 
+```
+
+From the graph of positivitity, even though the lowest percentage is still higher than 50%, we can see that there is a downward trend of the percentage of positive sentences. 
+Therefore, philosophy still holds positive attitude toward religion and related topics, but there are less and less sentences that complimented religious topics. 
+For science, if we remove the year from 1600 to 1700, we also see a downward trend on scientific topics. 
+Thus, over 400 years, philosophers complimented on both science and religion less and less. 
+
+For the graph of negative sentences, the upward trend of religious topics is clear, and it goes from about 12 percent to about 17 percent. As the time moves forward, the criticism toward the religion goes up. But we cannot see an apparent trend on the scientific topic.
+
+Overall, the positivity toward religion goes down and the negativity goes up over 400 hundred years. We cannot see an apparent pattern about science.
+
+
+# Conlusion
+From the data analysis, we can conclude that in the development of philosophy, religion and science are always hot topics, and they do not appear to be opposites. When we analyze the data by the school, we find out that the percentage of sentences that related to religion is always greater than science. When implementing sentiment test to these sentences and grouped by school, we find out that the percentage of positive religious sentences is greater than scientific sentences for every school. It goes same for negative sentences percentage. Therefore, for sentiment test, we can conclude that philosophers have more compliments both on religion and science than criticizing these two topics. Also, with the heatmap on emotions, we can see that "Anticipation, joy, surprise, trust" are strongly, positively, related, and other four negative emotions have weak or non-existing correlations. This heatmap is a collaborative evidence on our previous finding that philosophers said more with compliments. When we process the data by time, we find out that the percentage of religious sentences decreased shapely every a hundred years, and the frequency of mentioning science goes up. We also analyze the sentiment by the year. It is interesting that the both percentage of positive religious and scientific sentences a goes down as the time moves forward. The negative religious sentences goes up while the percentage of negative scientific sentences has no apparent trend. Therefore, we can see that philosophers compliment both on religious and scientific topics less and less in these four hundred years. The criticism on religion becomes an important topic as the time moves forward. Overall, philosophers does not treat religion and science as opposites topics. These topics are important through the history of philosophy and they still are. Philosophers compliment these topics much more than criticizing them. As the time moves forward, the importance of religion goes down and of science goes up in the field of philosophy, but they are not opposites, and people can believe in religion and science both.
