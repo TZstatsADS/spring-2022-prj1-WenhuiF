@@ -18,6 +18,7 @@ Term: Fall 2022
 3) How does the sentiment toward science and religion for each school?
 4) How does the relationship between philosophy and science, religion change over time?
 5) How does the attitude towards science and religion change over the year?
+
 Therefore, to study the contents of philosophy, the topic and the direction of data analysis will be the relationship between science, religion and philosophy.
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
